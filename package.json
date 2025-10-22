@@ -5,14 +5,21 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "doc": "jsdoc -c jsdoc.json"
   },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "vite": "^5.0.0",
-    "@vitejs/plugin-react": "^4.0.0"
+    "@vitejs/plugin-react": "^4.0.0",
+    "jsdoc": "^4.0.5",
+    "minami": "^1.2.3",
+    "vite": "^5.0.0"
+  },
+  "opts": {
+    "destination": "./docs",
+    "template": "node_modules/minami"
   }
 }

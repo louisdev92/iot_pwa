@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: App.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: App.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { useEffect, useState } from 'react'
+import { fetchSensors, fetchToilettes } from './api'
+import SondesList from './components/SondesList'
+import ToilettesList from './components/ToilettesList'
+
+/**
+ * Composant principal de l'application IoT Dashboard
+ * @returns {JSX.Element}
+ */
+export default function App() {
+    // États pour les données
+    const [sensors, setSensors] = useState([])
+    const [toilettes, setToilettes] = useState([])
+    const [activeTab, setActiveTab] = useState('sensor') // 'sensor' ou 'toilette'
+
+    // États pour les filtres
+    const [sensorFilter, setSensorFilter] = useState({ device: '', type: '' })
+    const [toiletteFilter, setToiletteFilter] = useState({ device: '', occupancy: '' })
+
+    /**
+     * Chargement des données depuis l'API au montage du composant
+     */
+    useEffect(() => {
+        async function loadData() {
+            const [sensorsData, toilettesData] = await Promise.all([fetchSensors(), fetchToilettes()])
+            setSensors(sensorsData)
+            setToilettes(toilettesData)
+        }
+        loadData()
+    }, [])
+
+    /**
+     * Enregistrement du Service Worker et gestion des notifications simulées
+     */
+    useEffect(() => {
+        if (!('serviceWorker' in navigator)) return
+
+        let interval = null
+
+        // Enregistrement du service worker
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('Service Worker enregistré', reg))
+            .catch(err => console.error('Erreur SW', err))
+
+        // Demande d'autorisation pour les notifications
+        Notification.requestPermission().then(permission => {
+            if (permission !== 'granted') {
+                console.log('Notifications refusées')
+                return
+            }
+
+            console.log('Notifications autorisées')
+
+            // Alterne l'état des toilettes toutes les 2 secondes pour simulation
+            let occupied = false
+
+            interval = setInterval(() => {
+                occupied = !occupied
+
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.showNotification(
+                        occupied ? '🚨 Toilette occupée !' : '✅ Toilette libre !',
+                        {
+                            body: occupied ? '⚠️ Situation critique' : 'A vos risques et périls !',
+                            icon: occupied ? '/icons/test4.png' : '/icons/test5.png',
+                            tag: 'simu-toilette', // même tag pour remplacer l’ancienne notif
+                            renotify: true,
+                            vibrate: occupied ? [200, 100, 200] : undefined,
+                        }
+                    )
+                })
+            }, 2000)
+        })
+
+        // Nettoyage de l'intervalle à la destruction du composant
+        return () => {
+            if (interval) clearInterval(interval)
+        }
+    }, [])
+
+    // Préparer les devices uniques pour les filtres
+    const sensorDevices = [...new Set(sensors.map(s => s.device_id))]
+    const toiletteDevices = [...new Set(toilettes.map(t => t.device_id))]
+
+    // Application des filtres sur les capteurs
+    const filteredSensors = sensors
+        .filter(s => !sensorFilter.device || s.device_id === sensorFilter.device)
+        .filter(s => !sensorFilter.type || s.type.toLowerCase().includes(sensorFilter.type.toLowerCase()))
+
+    // Application des filtres sur les toilettes
+    const filteredToilettes = toilettes
+        .filter(t => !toiletteFilter.device || t.device_id === toiletteFilter.device)
+        .filter(t => !toiletteFilter.occupancy || t.occupancy === toiletteFilter.occupancy)
+
+    return (
+        &lt;div className="app">
+            &lt;header>
+                &lt;h1>IoT Dashboard&lt;/h1>
+
+                {/* Onglets pour choisir l'affichage */}
+                &lt;div className="tabs">
+                    &lt;button
+                        className={activeTab === 'toilette' ? 'active' : ''}
+                        onClick={() => setActiveTab('toilette')}
+                    >
+                        Toilettes
+                    &lt;/button>
+                    &lt;button
+                        className={activeTab === 'sensor' ? 'active' : ''}
+                        onClick={() => setActiveTab('sensor')}
+                    >
+                        Capteurs Ponts
+                    &lt;/button>
+                &lt;/div>
+
+                {/* Contrôles supplémentaires */}
+                &lt;div className="controls">
+                    {/* Bouton mode sombre */}
+                    &lt;button
+                        className="dark-mode-toggle"
+                        onClick={() => document.body.classList.toggle('dark-mode')}
+                    >
+                        🌙 Mode sombre
+                    &lt;/button>
+
+                    {/* Filtre pour les capteurs */}
+                    {activeTab === 'sensor' &amp;&amp; (
+                        &lt;div className="filter-group">
+                            &lt;select
+                                value={sensorFilter.device}
+                                onChange={e => setSensorFilter({ ...sensorFilter, device: e.target.value })}
+                            >
+                                &lt;option value="">Toutes les sondes&lt;/option>
+                                {sensorDevices.map(d => &lt;option key={d} value={d}>{d}&lt;/option>)}
+                            &lt;/select>
+                        &lt;/div>
+                    )}
+
+                    {/* Filtre pour les toilettes */}
+                    {activeTab === 'toilette' &amp;&amp; (
+                        &lt;div className="filter-group">
+                            &lt;select
+                                value={toiletteFilter.occupancy}
+                                onChange={e => setToiletteFilter({ ...toiletteFilter, occupancy: e.target.value })}
+                            >
+                                &lt;option value="">Occupancy&lt;/option>
+                                &lt;option value="vacant">Vacant&lt;/option>
+                                &lt;option value="occupied">Occupied&lt;/option>
+                            &lt;/select>
+                        &lt;/div>
+                    )}
+                &lt;/div>
+            &lt;/header>
+
+            {/* Affichage du tableau correspondant à l'onglet actif */}
+            &lt;main>
+                {activeTab === 'toilette' &amp;&amp; &lt;ToilettesList toilettes={filteredToilettes} />}
+                {activeTab === 'sensor' &amp;&amp; &lt;SondesList sensors={filteredSensors} />}
+            &lt;/main>
+        &lt;/div>
+    )
+}</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#fetchAlerts">fetchAlerts</a></li><li><a href="global.html#fetchBridges">fetchBridges</a></li><li><a href="global.html#fetchEvents">fetchEvents</a></li><li><a href="global.html#fetchSensors">fetchSensors</a></li><li><a href="global.html#fetchToilettes">fetchToilettes</a></li><li><a href="global.html#registerSW">registerSW</a></li><li><a href="global.html#root">root</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Wed Oct 22 2025 10:05:09 GMT+0200 (heure d’été d’Europe centrale)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
