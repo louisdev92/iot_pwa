@@ -51,3 +51,7 @@ npm run build
 ```bash
 npm run preview
 ```
+4.**Documentation JS**
+```bash
+npx serve docs
+```
