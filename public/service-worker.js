@@ -1,65 +1,83 @@
-// Nom du cache pour l'application PWA
-const CACHE_NAME = 'iot-pwa-v1'
+// ---------- Noms des caches ----------
+const CACHE_STATIC = 'iot-pwa-static-v1'
+const CACHE_DYNAMIC = 'iot-pwa-dynamic-v1'
 
-// Liste des fichiers statiques à mettre en cache
+// ---------- Fichiers statiques ----------
 const STATIC_ASSETS = [
     '/',
     '/index.html',
+    '/style.css',    // ton CSS
+    '/main.js',      // ton JS principal
     '/icons/test.png',
     '/icons/test4.png',
     '/icons/test5.png'
 ]
 
-/**
- * Installation du service worker
- * Mise en cache des fichiers statiques définis dans STATIC_ASSETS
- */
+// ---------- Installation ----------
 self.addEventListener('install', event => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+        caches.open(CACHE_STATIC).then(cache => cache.addAll(STATIC_ASSETS))
     )
-    self.skipWaiting() // Active immédiatement le SW sans attendre
+    self.skipWaiting()
 })
 
-/**
- * Activation du service worker
- * Prend le contrôle des clients immédiatement
- */
+// ---------- Activation ----------
 self.addEventListener('activate', event => {
     event.waitUntil(self.clients.claim())
 })
 
-/**
- * Gestion des requêtes réseau
- * Sert les fichiers depuis le cache si disponibles, sinon récupère via fetch
- */
+// ---------- Gestion des requêtes (Network First pour API, Cache First pour statique) ----------
 self.addEventListener('fetch', event => {
+    const request = event.request
+    const urlPath = new URL(request.url).pathname
+
+    // 1️⃣ API → Network First + cache dynamique
+    if (request.url.includes('/api/')) {
+        event.respondWith(
+            fetch(request)
+                .then(resp => {
+                    const respClone = resp.clone()
+                    caches.open(CACHE_DYNAMIC).then(cache => cache.put(request, respClone))
+                    return resp
+                })
+                .catch(() => caches.match(request))
+        )
+        return
+    }
+
+    // 2️⃣ Fichiers statiques → Cache First
+    if (STATIC_ASSETS.includes(urlPath)) {
+        event.respondWith(
+            caches.match(request).then(cached => cached || fetch(request))
+        )
+        return
+    }
+
+    // 3️⃣ Tout le reste → Network First + cache dynamique
     event.respondWith(
-        caches.match(event.request).then(cached => cached || fetch(event.request))
+        fetch(request)
+            .then(resp => {
+                const respClone = resp.clone()
+                caches.open(CACHE_DYNAMIC).then(cache => cache.put(request, respClone))
+                return resp
+            })
+            .catch(() => caches.match(request))
     )
 })
 
 // ---------- Notifications push ----------
-
-/**
- * Gestion des notifications push
- * @param {PushEvent} event - Événement de notification push
- */
 self.addEventListener('push', event => {
     const data = event.data?.json() || {}
     const title = data.title || 'Nouvelle notification'
     const options = {
         body: data.body || 'Tu as reçu un message !',
         icon: '/icons/test.png',
-        badge: '/icons/test.png'
+        badge: '/icons/test.png',
+        data: data.url || '/'
     }
     event.waitUntil(self.registration.showNotification(title, options))
 })
 
-/**
- * Gestion du clic sur la notification
- * @param {NotificationEvent} event - Événement de clic sur notification
- */
 self.addEventListener('notificationclick', event => {
     event.notification.close()
     const urlToOpen = event.notification.data || '/'
@@ -75,20 +93,15 @@ self.addEventListener('notificationclick', event => {
 })
 
 // ---------- Simulation Libre / Occupé ----------
-
-// État initial de l'occupation
 let occupied = false
 
-/**
- * Envoie une notification simulant l'occupation des toilettes
- */
 function sendOccupancyNotification() {
-    occupied = !occupied // Alterne l'état entre libre et occupé
+    occupied = !occupied
     const title = occupied ? '🚨 Toilette occupée !' : '✅ Toilette libre !'
     const options = {
         body: occupied ? '⚠️ Situation critique' : 'A vos risques et périls !',
         icon: occupied ? '/icons/test4.png' : '/icons/test5.png',
-        tag: 'simu-toilette', // même tag pour remplacer la notif précédente
+        tag: 'simu-toilette',
         renotify: true,
         vibrate: occupied ? [200, 100, 200] : undefined
     }
@@ -96,10 +109,7 @@ function sendOccupancyNotification() {
     self.registration.showNotification(title, options)
 }
 
-/**
- * Envoi périodique de notifications toutes les 2 secondes
- * Attention : uniquement pour développement
- */
+// Activation de l’envoi périodique toutes les 10 secondes
 self.addEventListener('activate', () => {
-    setInterval(sendOccupancyNotification, 2000)
+    setInterval(sendOccupancyNotification, 10000)
 })
